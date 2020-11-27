@@ -1,0 +1,807 @@
+---
+title: "Capstone"
+author: "Nour Al Khoury & Aram Papazian"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::material:
+    highlight: kate
+---
+
+
+```{r setup, echo=FALSE, cache=TRUE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+               cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE
+)
+opts_knit$set(width=75)
+```
+
+
+# Diff Expression Dataset 1
+
+<style>
+.nav>li>a {
+position: relative;
+display: block;
+padding: 10px 15px;
+color: black;
+}
+.nav-pills>li.active>a, .nav-pills>li.active>a:hover, .nav-pills>li.active>a:focus {
+color: #32B9A7;
+background-color: grey;
+background: #D3D3D3;
+}
+
+</style>
+
+
+## Setup{.tabset .tabset-fade .tabset-pills}
+
+### Reading Feature count files
+```{r eval=FALSE, message=FALSE, warning=FALSE}
+counts1=read.delim(choose.files() ,row.names = 1)
+ 
+for (i in 1:11) {
+  counts2=read.delim(choose.files(),row.names = 1)
+  counts1=cbind(counts1,counts2[,1])
+}
+colnames(counts1)[1:6]="R"
+colnames(counts1)[7:12]="E"
+group=colnames(counts1)
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+r1<- read.table("Desktop/pipeline/Counts1/Counts1.tabular",header = T,sep="\t")
+r2<- read.table("Desktop/pipeline/Counts1/Counts2.tabular",header = T,sep="\t")
+r3<- read.table("Desktop/pipeline/Counts1/Counts3.tabular",header = T,sep="\t")
+r4<- read.table("Desktop/pipeline/Counts1/Counts4.tabular",header = T,sep="\t")
+r5<- read.table("Desktop/pipeline/Counts1/Counts5.tabular",header = T,sep="\t")
+r6<- read.table("Desktop/pipeline/Counts1/Counts6.tabular",header = T,sep="\t")
+ex1<- read.table("Desktop/pipeline/Counts1/CountsE1.tabular", header=T, sep = "\t")
+ex2<- read.table("Desktop/pipeline/Counts1/CountsE2.tabular", header=T, sep = "\t")
+ex3<- read.table("Desktop/pipeline/Counts1/CountsE3.tabular", header=T, sep = "\t")
+ex4<- read.table("Desktop/pipeline/Counts1/CountsE4.tabular", header=T, sep = "\t")
+ex5<- read.table("Desktop/pipeline/Counts1/CountsE5.tabular", header=T, sep = "\t")
+ex6<- read.table("Desktop/pipeline/Counts1/CountsE6.tabular", header=T, sep = "\t")
+counts1= data.frame(cbind(r1[,2],r2[,2],r3[,2],r4[,2],r5[,2],r6[,2],ex1[,2],ex2[,2],ex3[,2],ex4[,2],ex5[,2],ex6[,2]))
+rownames(counts1)=r1[,1]
+
+colnames(counts1)[1:6]="R"
+colnames(counts1)[7:12]="E"
+group=colnames(counts1)
+```
+
+
+### Create a DGEList object
+```{r warning=FALSE, message=FALSE}
+library(edgeR)
+d0 <- DGEList(counts1)
+```
+
+## Preprocessing {.tabset .tabset-fade .tabset-pills}
+
+### Calculate normalization factors
+```{r warning=FALSE, message=FALSE}
+d0 <- calcNormFactors(d0)
+d0
+```
+
+### Filter low-expressed genes
+```{r warning=FALSE, message=FALSE}
+cutoff <- 1
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d) 
+```
+
+### Multidimensional scaling plot
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.pos='p' }
+col <- as.numeric(group)
+plotMDS(d, col=as.numeric(group))
+```
+
+## Voom transformation {.tabset .tabset-fade .tabset-pills}
+
+### Model Matrix
+Specify the model to be fitted. 
+```{r warning=FALSE, message=FALSE}
+mm <- model.matrix(~0 + group)
+```
+
+```{r warning=FALSE, message=FALSE}
+mm
+```
+
+### Voom
+```{r  fig.align='center', fig.pos='p', warning=FALSE, message=FALSE}
+y <- voom(d, mm, plot = T)
+```
+
+### Fitting linear models
+```{r warning=FALSE, message=FALSE}
+library(limma)
+library(reactable)
+```
+
+limma lmFit fits a linear model using weighted least squares for each gene:
+```{r warning=FALSE, message=FALSE}
+fit <- lmFit(y, mm)
+```
+
+```{r warning=FALSE, message=FALSE}
+reactable(coef(fit), bordered = T,highlight = T,height = 300, defaultPageSize = 15, searchable = T, filterable = T,defaultColDef = colDef(headerClass = "sort-header",  minWidth = 85,
+            headerStyle = list(background = "#B7BABA")),columns =  list( groupR = colDef(style = function(value) {
+  if (value > 0) {
+    color <- "#32B9A7"
+  } else if (value < 0) {
+    color <- "#9D9C9C"
+  } else {
+    color <- "#777"
+  }
+  list(color = color, fontWeight = "bold")}),
+  groupE=colDef(style = function(value) {
+    if (value > 0) {
+      color <- "#32B9A7"
+    } else if (value < 0) {
+      color <- "#9D9C9C"
+    } else {
+      color <- "#777"
+    }
+    list(color = color, fontWeight = "bold")
+  })))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+prnt.test <- function(x){
+   cat(x, sep="\n\n")
+}
+prnt.test("")
+prnt.test("")
+```
+
+Comparison between before exercise and after exercise
+```{r warning=FALSE, message=FALSE}
+contr <- makeContrasts(groupE - groupR, levels = colnames(coef(fit)))
+contr
+```
+
+Estimate contrast for each gene
+```{r warning=FALSE, message=FALSE}
+tmp <- contrasts.fit(fit, contr)
+```
+
+Empirical Bayes smoothing of standard errors 
+```{r warning=FALSE, message=FALSE}
+tmp <- eBayes(tmp)
+```
+
+What genes are most differentially expressed?
+```{r warning=FALSE, message=FALSE}
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+```
+
+## Filtering{.tabset .tabset-fade .tabset-pills}
+
+### Pvalue
+Filter the genes that have adjPval < 0.05
+```{r warning=FALSE, message=FALSE}
+top.table$Gene <- rownames(top.table)
+top.table <- top.table[,c("Gene", names(top.table)[1:6])]
+top.table=top.table[which(top.table[,6]<0.05),]
+```
+
+### LogFC
+
+Filter genes with |LogFC| <= 0.5 
+```{r warning=FALSE, message=FALSE}
+no=vector()
+index=1
+for (i in 1:nrow(top.table)){
+  if(abs(top.table[i,2])<=0.5){
+    no[index]=i
+    index=index+1
+  }
+}
+top.table=top.table[-no,]
+```
+
+## Top Genes {.tabset .tabset-fade .tabset-pills}
+
+### BiomaRt
+Biomart to get the top 20 gene names
+
+```{r warning=FALSE, message=FALSE}
+library(biomaRt)
+e = useMart("ensembl")
+ensembl = useEnsembl(biomart = "ensembl", dataset = "ecaballus_gene_ensembl")
+horse = useDataset(dataset = "ecaballus_gene_ensembl",mart=e)
+g.names = getBM(attributes = c("external_gene_name", "ensembl_gene_id"), filters = "ensembl_gene_id", values=top.table[1:20,1], mart=ensembl)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+names = c(1:20)
+top20 = top.table[1:20,]
+for(i in 1:NROW(top20)){
+  
+  index = which(g.names$ensembl_gene_id == top20[i,1])
+  
+  if(length(index!=0)){names[i]= g.names$external_gene_name[index]}
+}
+#g.names$external_gene_name[9]=g.names$ensembl_gene_id[9]
+#g.names$external_gene_name[19]=g.names$ensembl_gene_id[19]
+
+names[8]=top20[8,1]
+names[12]=top20[12,1]
+
+top20[,1]=names
+rownames(top20)=c(1:20)
+
+```
+
+### Results 
+
+PS: if you click on the gene, it will lead you it's ensembl page.
+
+```{r warning=FALSE, message=FALSE}
+reactable(top20[,-ncol(top20)], resizable = TRUE, bordered = TRUE, highlight = TRUE, showSortIcon = T,fullWidth = TRUE,wrap = F, searchable = TRUE,filterable = TRUE, defaultPageSize = 10, rownames = TRUE,
+          defaultColDef = colDef(headerClass = "sort-header",  minWidth = 85,
+            headerStyle = list(background = "#B7BABA")), columns = list(
+             Gene = colDef(html = TRUE, cell = JS("function(cellInfo) {
+    // Render as a link
+      var url = 'https://asia.ensembl.org/Equus_caballus/Search/Results?q='+cellInfo.value+';site=ensembl;facet_species=Horse;page=1' + cellInfo.row.Gene + '_' + cellInfo.value
+      return '<a href=\"' + url + '\" target=\"_blank\">' + cellInfo.value + '</a>'
+      }" 
+                                   ))))
+
+```
+
+# Diff Expression Dataset 2
+
+## Setup {.tabset .tabset-fade .tabset-pills}
+
+### Reading Feature count files
+```{r eval=FALSE, message=FALSE, warning=FALSE}
+counts11=read.delim(choose.files() ,row.names = 1)
+ 
+for (i in 1:11) {
+  counts22=read.delim(choose.files(),row.names = 1)
+  counts11=cbind(counts11,counts22[,1])
+}
+colnames(counts11)[1:6]="R"
+colnames(counts11)[7:12]="E"
+group=colnames(counts11)
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+r1<- read.table("Desktop/pipeline/Counts/Rest1.tabular",header = T,sep="\t")
+r2<- read.table("Desktop/pipeline/Counts/Rest2.tabular",header = T,sep="\t")
+r3<- read.table("Desktop/pipeline/Counts/Rest3.tabular",header = T,sep="\t")
+r4<- read.table("Desktop/pipeline/Counts/Rest4.tabular",header = T,sep="\t")
+r5<- read.table("Desktop/pipeline/Counts/Rest5.tabular",header = T,sep="\t")
+r6<- read.table("Desktop/pipeline/Counts/Rest6.tabular",header = T,sep="\t")
+ex1<- read.table("Desktop/pipeline/Counts/Exercise1.tabular", header=T, sep = "\t")
+ex2<- read.table("Desktop/pipeline/Counts/Exercise2.tabular", header=T, sep = "\t")
+ex3<- read.table("Desktop/pipeline/Counts/Exercise3.tabular", header=T, sep = "\t")
+ex4<- read.table("Desktop/pipeline/Counts/Exercise4.tabular", header=T, sep = "\t")
+ex5<- read.table("Desktop/pipeline/Counts/Exercise5.tabular", header=T, sep = "\t")
+ex6<- read.table("Desktop/pipeline/Counts/Exercise6.tabular", header=T, sep = "\t")
+counts11= data.frame(cbind(r1[,2],r2[,2],r3[,2],r4[,2],r5[,2],r6[,2],ex1[,2],ex2[,2],ex3[,2],ex4[,2],ex5[,2],ex6[,2]))
+
+rownames(counts11)=r1[,1]
+
+colnames(counts11)[1:6]="R"
+colnames(counts11)[7:12]="E"
+group=colnames(counts11)
+```
+
+
+### Create a DGEList object
+```{r warning=FALSE, message=FALSE}
+library(edgeR)
+d0 <- DGEList(counts11)
+```
+
+## Preprocessing {.tabset .tabset-fade .tabset-pills}
+
+### Calculate normalization factors
+```{r warning=FALSE, message=FALSE}
+d0 <- calcNormFactors(d0)
+d0
+```
+
+### Filter low-expressed genes
+```{r warning=FALSE, message=FALSE}
+cutoff <- 1
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d) 
+```
+
+### Multidimensional scaling plot
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.pos='p' }
+col <- as.numeric(group)
+plotMDS(d, col=as.numeric(group))
+```
+
+## Voom transformation {.tabset .tabset-fade .tabset-pills}
+
+### Model Matrix
+Specify the model to be fitted. 
+```{r warning=FALSE, message=FALSE}
+mm <- model.matrix(~0 + group)
+```
+```{r warning=FALSE, message=FALSE}
+mm
+```
+
+### Voom
+```{r  fig.align='center', fig.pos='p', warning=FALSE, message=FALSE}
+y <- voom(d, mm, plot = T)
+```
+
+### Fitting linear models
+
+limma lmFit fits a linear model using weighted least squares for each gene:
+```{r warning=FALSE, message=FALSE}
+fit <- lmFit(y, mm)
+```
+
+```{r warning=FALSE, message=FALSE}
+reactable(coef(fit), bordered = T,highlight = T,height = 300, defaultPageSize = 15, searchable = T, filterable = T,defaultColDef = colDef(headerClass = "sort-header",  minWidth = 85,
+            headerStyle = list(background = "#B7BABA")),columns =  list( groupR = colDef(style = function(value) {
+  if (value > 0) {
+    color <- "#32B9A7"
+  } else if (value < 0) {
+    color <- "#9D9C9C"
+  } else {
+    color <- "#777"
+  }
+  list(color = color, fontWeight = "bold")}),
+  groupE=colDef(style = function(value) {
+    if (value > 0) {
+      color <- "#32B9A7"
+    } else if (value < 0) {
+      color <- "#9D9C9C"
+    } else {
+      color <- "#777"
+    }
+    list(color = color, fontWeight = "bold")
+  })))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+prnt.test <- function(x){
+   cat(x, sep="\n\n")
+}
+prnt.test("")
+prnt.test("")
+```
+```
+```
+Comparison between before exercise and after exercise
+```{r warning=FALSE, message=FALSE}
+contr <- makeContrasts(groupE - groupR, levels = colnames(coef(fit)))
+contr
+```
+Estimate contrast for each gene
+```{r warning=FALSE, message=FALSE}
+tmp <- contrasts.fit(fit, contr)
+```
+Empirical Bayes smoothing of standard errors 
+```{r warning=FALSE, message=FALSE}
+tmp <- eBayes(tmp)
+```
+What genes are most differentially expressed?
+```{r warning=FALSE, message=FALSE}
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+```
+
+## Filtering{.tabset .tabset-fade .tabset-pills}
+
+### Pvalue
+Filter the genes that have adjPval < 0.05
+```{r warning=FALSE, message=FALSE}
+top.table$Gene <- rownames(top.table)
+top.table <- top.table[,c("Gene", names(top.table)[1:6])]
+top.table=top.table[which(top.table[,6]<0.05),]
+```
+
+### LogFC
+
+Filter genes with |LogFC| <= 0.5 
+```{r warning=FALSE, message=FALSE}
+no=vector()
+index=1
+for (i in 1:nrow(top.table)){
+  if(abs(top.table[i,2])<=0.5){
+    no[index]=i
+    index=index+1
+  }
+}
+top.table=top.table[-no,]
+```
+
+## Top Genes {.tabset .tabset-fade .tabset-pills}
+
+### BiomaRt
+Biomart to get the top 20 gene names
+
+```{r warning=FALSE, message=FALSE}
+g.names = getBM(attributes = c("external_gene_name", "ensembl_gene_id"), filters = "ensembl_gene_id", values=top.table[1:20,1], mart=ensembl)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+names = c(1:20)
+top20 = top.table[1:20,]
+for(i in 1:NROW(top20)){
+  
+  index = which(g.names$ensembl_gene_id == top20[i,1])
+  
+  if(length(index!=0)){names[i]= g.names$external_gene_name[index]}
+}
+#g.names$external_gene_name[9]=g.names$ensembl_gene_id[9]
+#g.names$external_gene_name[19]=g.names$ensembl_gene_id[19]
+
+names[2]=top20[2,1]
+names[9]=top20[9,1]
+names[18]=top20[18,1]
+
+
+top20[,1]=names
+rownames(top20)=c(1:20)
+
+```
+
+### Results 
+
+PS: if you click on the gene, it will lead you it's ensembl page.
+
+```{r warning=FALSE, message=FALSE}
+reactable(top20[,-ncol(top20)], resizable = TRUE, bordered = TRUE, highlight = TRUE, showSortIcon = T,fullWidth = TRUE,wrap = F, searchable = TRUE,filterable = TRUE, defaultPageSize = 10, rownames = TRUE,
+          defaultColDef = colDef(headerClass = "sort-header",  minWidth = 85,
+            headerStyle = list(background = "#B7BABA")), columns = list(
+             Gene = colDef(html = TRUE, cell = JS("function(cellInfo) {
+    // Render as a link
+      var url = 'https://asia.ensembl.org/Equus_caballus/Search/Results?q='+cellInfo.value+';site=ensembl;facet_species=Horse;page=1' + cellInfo.row.Gene + '_' + cellInfo.value
+      return '<a href=\"' + url + '\" target=\"_blank\">' + cellInfo.value + '</a>'
+      }" 
+                                   ))))
+
+```
+
+
+# SNP identification
+
+## Setup {.tabset .tabset-fade .tabset-pills}
+
+### DE files
+```{r message=FALSE, warning=FALSE}
+de1<- read.table("Desktop/GATK/DE/Fil DEs/DEHorse1filtered.txt", header = T)
+de2 <- read.table("Desktop/GATK/DE/Fil DEs/DEHorse2filtered.txt", header = T)
+de3 <- read.table("Desktop/GATK/DE/Fil DEs/DEHorse3filtered.txt", header = T)
+de4<- read.table("Desktop/GATK/DE/Fil DEs/DEHorse4filtered.txt", header = T)
+de5 <- read.table("Desktop/GATK/DE/Fil DEs/DEHorse5filtered.txt", header = T)
+de6<- read.table("Desktop/GATK/DE/Fil DEs/DEHorse6filtered.txt", header = T)
+```
+
+### VCF Files
+
+Annotated VCF by biomart
+```{r}
+horse1=read.table("Desktop/pipeline/biomart/horse1.txt", header=F, sep = "\t")
+horse2=read.table("Desktop/pipeline/biomart/horse2.txt", header=F, sep = "\t")
+horse3=read.table("Desktop/pipeline/biomart/horse3.txt", header=F, sep = "\t")
+horse4=read.table("Desktop/pipeline/biomart/horse4.txt", header=F, sep = "\t")
+horse5=read.table("Desktop/pipeline/biomart/horse5.txt", header=F, sep = "\t")
+horse6=read.table("Desktop/pipeline/biomart/horse6.txt", header=F, sep = "\t")
+```
+
+
+### Filtering
+
+filter DE by |logFC| < 0.5
+```{r}
+FC_filter_function <- function(x)
+{
+  x <- x[-which(abs(x$logFC)<0.5),]
+  return(x)
+  }
+de_list <- list(de1,de2,de3,de4,de5,de6)
+
+de_filtered= lapply(de_list, FC_filter_function)
+```
+
+Top Genes that had a meaningful role in horse athletic performance from enrichr.
+```{r}
+enrichr=read.delim("Desktop/mart_export.txt", sep = ",")
+nrow(enrichr)
+```
+
+## VCF Stats {.tabset .tabset-fade .tabset-pills}
+
+### Functions
+```{r}
+novel_count <- function(horsex){
+novel=length(which(horsex[,1]=="."))
+return(novel)
+}
+
+known_count <-function(horsex){
+   known=length(which(horsex[,1]!="."))
+   return(known)
+}
+
+conseq<- function(horsexx){
+  total = nrow(horsexx)
+  others=100
+ intron_variantt = ((length(which(horsexx[,4]=="intron_variant"))))
+ intron_variant=paste0(floor(intron_variantt*100), "%")
+ 
+  downstream_gene_variantt=((length(which(horsexx[,4]=="downstream_gene_variant"))))
+  downstream_gene_variant=paste0(floor(downstream_gene_variantt*100), "%")
+  
+   synonymous_variantt=((length(which(horsexx[,4]=="synonymous_variant"))))
+  synonymous_variant=paste0(floor(synonymous_variantt*100), "%")
+  
+   upstream_gene_variant=((length(which(horsexx[,4]=="upstream_gene_variant"))))
+  upstream_gene_varian=paste0(floor(upstream_gene_variant*100), "%")
+  
+     missense_variantt=((length(which(horsexx[,4]=="missense_variant"))))
+  missense_variant=paste0(floor(missense_variantt*100), "%")
+  
+    three_prime_UTR_variantt=((length(which(horsexx[,4]=="3_prime_UTR_variant"))))
+  three_prime_UTR_variant=paste0(floor(three_prime_UTR_variantt*100), "%")
+  
+  intergenic_variantt=((length(which(horsexx[,4]=="intergenic_variant"))))
+  intergenic_variant=paste0(floor(intergenic_variantt*100), "%")
+  
+  splice_region_variantt=((length(which(horsexx[,4]=="splice_region_variant"))))
+  splice_region_variant=paste0(floor(splice_region_variantt*100), "%")
+  
+    non_coding_transcript_variantt=((length(which(horsexx[,4]=="non_coding_transcript_variant"))))
+  non_coding_transcript_variant=paste0(floor(non_coding_transcript_variantt*100), "%")
+  
+   otherss=others-intron_variantt-non_coding_transcript_variantt-splice_region_variantt-intergenic_variantt-three_prime_UTR_variantt-missense_variantt-upstream_gene_variant-synonymous_variantt-downstream_gene_variantt
+   others=paste0(floor(others*100), "%")
+  
+   return(c(intron_variantt,downstream_gene_variantt, upstream_gene_variant,synonymous_variantt,missense_variantt, three_prime_UTR_variantt,intergenic_variantt,splice_region_variantt,non_coding_transcript_variantt, otherss))
+}
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+all_conseq=data.frame()
+c1=conseq(horse1)
+c2=conseq(horse2)
+c3=conseq(horse3)
+c4=conseq(horse4)
+c5=conseq(horse5)
+c6=conseq(horse6)
+
+all_conseq=rbind(c1,c2,c3,c4,c5,c6)
+colnames(all_conseq)=c("intron_variant","downstream_gene_variant", "upstream_gene_varian","synonymous_variant","missense_variant", "3_prime_UTR_variant","intergenic_variant","splice_region_variant","non_coding_transcript_variant", "others")
+```
+
+```{r eval=FALSE}
+all_conseq=data.frame()
+
+for(i in list(horse1,horse2,horse3,horse4,horse5,horse6)){
+  c=conseq(i)
+  all_conseq=rbind(all_conseq,c)
+}
+
+colnames(all_conseq)=c("intron_variant","downstream_gene_variant", "upstream_gene_varian","synonymous_variant","missense_variant", "3_prime_UTR_variant","intergenic_variant","splice_region_variant","non_coding_transcript_variant", "others")
+```
+
+```{r echo=FALSE}
+cc1=as.data.frame(all_conseq[1,])
+cc1=cbind(rownames(cc1),cc1)
+colnames(cc1)=c("group","value")
+
+cc2=as.data.frame(all_conseq[2,])
+cc2=cbind(rownames(cc2),cc2)
+colnames(cc2)=c("group","value")
+
+cc3=as.data.frame(all_conseq[3,])
+cc3=cbind(rownames(cc3),cc3)
+colnames(cc3)=c("group","value")
+
+cc4=as.data.frame(all_conseq[4,])
+cc4=cbind(rownames(cc4),cc4)
+colnames(cc4)=c("group","value")
+
+cc5=as.data.frame(all_conseq[5,])
+cc5=cbind(rownames(cc5),cc5)
+colnames(cc5)=c("group","value")
+
+cc6=as.data.frame(all_conseq[6,])
+cc6=cbind(rownames(cc6),cc6)
+colnames(cc6)=c("group","value")
+```
+
+### Known vs Novel
+
+```{r echo=F}
+results=data.frame(NA)
+
+novels= c(novel_count(horse1), novel_count(horse2), novel_count(horse3), novel_count(horse4), novel_count(horse5), novel_count(horse6))
+
+knowns=c( known_count(horse1), known_count(horse2), known_count(horse3), known_count(horse4), known_count(horse5), known_count(horse6))
+
+Horse=c(1:6)
+results= cbind(Horse,novels, knowns)
+
+colnames(results)=c("Horse","Novel", "Known")
+```
+
+```{r fig.align='center', fig.pos='p', warning=F, error=F, message=F}
+
+reactable(results, bordered = T,highlight = T,fullWidth = F,height = 300, defaultPageSize = 15, searchable = F, filterable = F, defaultColDef = colDef(headerClass = "sort-header",  minWidth= 85,headerStyle = list(background = "#B7BABA")),columns =  list( Horse = colDef(style = function(value) {
+  if (value ==1) {
+    color <- "#82E1D0"
+  } else if (value ==2) {
+    color <- "#7ACFBF"
+  }else if (value ==3) {
+    color <- "#69B4A7"
+  } else if (value ==4) {
+    color <- "#5FA599"
+  } else if (value ==5) {
+    color <- "#549085"
+  }else {
+    color <- "#4F877C"
+  }
+  list(color = color, fontWeight = "bold")})
+ ))
+
+```
+### Consequence stats
+Each interactive pie graph represents a horse. 
+By putting the cursor on the pie you can identify which horse it represents.
+```{r message=FALSE, warning=FALSE}
+library(plotly)
+
+fig <- plot_ly(cc1, labels = ~group, values = ~value, type ='pie', textinfo='percent',name='Horse 1',domain = list(x = c(0, 0.4), y = c(0.4, 1)) )
+fig <- fig %>% layout(title = 'SNPs Distribution.',showlegend = T,
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+fig <- fig %>% add_pie(data = cc2, labels = ~group, values = ~value,
+          name = "Horse2", domain = list(x = c(0.25, 0.75), y = c(0, 0.5)))
+fig <- fig %>% add_pie(data = cc3, labels = ~group, values = ~value,
+          name = "Horse3", domain = list(x = c(0.6, 1), y = c(0.4, 1)))
+
+
+fig2 <- plot_ly(cc4, labels = ~group, values = ~value, type = 'pie', textinfo='percent',name='Horse 4',domain = list(x = c(0, 0.4), y = c(0.4, 1)) )
+fig2<- fig2 %>% layout(title = 'SNPs Distribution.',showlegend = F,
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+fig2 <- fig2 %>% add_pie(data = cc5, labels = ~group, values = ~value,
+          name = "Horse 5", domain = list(x = c(0.25, 0.75), y = c(0, 0.5)))
+fig2 <- fig2 %>% add_pie(data = cc6, labels = ~group, values = ~value,
+          name = "Horse 6", domain = list(x = c(0.6, 1), y = c(0.4, 1)))
+fig
+fig2
+```
+
+## Results {.tabset .tabset-fade .tabset-pills}
+
+We will only visualize 1 gene for simplicity. However, in practice we did generate plots for the 64 genes.
+
+### LogFC 
+
+Gene's LogFC for each horse.
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.pos='p' }
+library(ggplot2)
+library(reshape2)
+library(FSA)
+library(plotly)
+
+table2=matrix(NA,nrow = 1, ncol =6)
+table2=table2[-1,]
+
+for(i in "ENSECAG00000019476"){
+  d1=which(de_filtered[[1]]$Gene==i)
+  d2= which(de_filtered[[2]]$Gene==i)
+  d3= which(de_filtered[[3]]$Gene==i)
+  d4= which(de_filtered[[4]]$Gene==i)
+  d5=which(de_filtered[[5]]$Gene==i)
+  d6= which(de_filtered[[6]]$Gene==i)
+  
+  if(length(d1)==0){
+    e1=0
+  }else{e1=de_filtered[[1]]$logFC[d1]}
+  
+  if(length(d2)==0){
+    e2=0
+  }else{e2=de_filtered[[2]]$logFC[d2]}
+  
+  if(length(d3)==0){
+    e3=0
+  }else{e3=de_filtered[[3]]$logFC[d3]}
+  
+  if(length(d4)==0){
+    e4=0
+  }else{e4=de_filtered[[4]]$logFC[d4]}
+  
+  if(length(d6)==0){
+    e6=0
+  }else{e6=de_filtered[[6]]$logFC[d6]}
+  
+  if(length(d5)==0){
+    e5=0
+  }else{e5=de_filtered[[5]]$logFC[d5]}
+  
+  ACTN1=c(e1, e2, e3,e4,e5,e6)
+  
+  table2=rbind(table2,ACTN1)
+}
+
+melted=melt(table2)
+colnames(melted)=c("genes", "Horse","LogFC")
+if(length(which(melted$LogFC==0)!=0)){
+  melted=melted[-which(melted$LogFC==0),]}
+
+melted$sample=as.factor(melted$Horse)
+p<- ggplot(melted, aes(x=genes,y=LogFC, fill=sample))+scale_fill_brewer(palette = "Set3") + geom_bar(stat="identity",position="dodge", width = 0.9) +facet_wrap(vars(genes))
+```
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.pos='p' }
+ggplotly(p)
+```
+
+### Venn Diagram
+
+The venn diagram for the variants per horse
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.pos='p' }
+library(venn)
+
+for (i in 1:6) {
+  
+  x=read.csv(paste("Desktop/pipeline/ACTN1A",i,".txt",sep =""),sep =" ",header = FALSE )
+  x[,1]=as.character(x[,1])
+  x[,2]=as.character(x[,2])
+  if(length(which(x[,1]=="."))>0){
+  arr=which(x[,1]==".")
+  for (j in arr) {
+    x[j,1]=strsplit(x[j,2],split ="|",fixed = TRUE)[[1]][10]
+  }
+  
+  }
+  assign(paste("A",i,sep =""),x)
+}
+
+v=venn(
+  x = list(A1[,1],A2[,1],A3[,1],A4[,1],A5[,1],A6[,1]),
+  snames = c("A1","A2","A3","A4","A5","A6"),
+  zcolor =c("orange","blue","yellow","red","green","purple"),
+  ilabels = TRUE
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
